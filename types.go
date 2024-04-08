@@ -4,42 +4,28 @@ import (
 	"math/big"
 
 	core "github.com/iden3/go-iden3-core/v2"
-	"github.com/iden3/go-iden3-crypto/babyjub"
+	babyjub "github.com/iden3/go-iden3-crypto/babyjub"
 	merkletree "github.com/rarimo/go-merkletree"
 	verifiable "github.com/rarimo/go-schema-processor/verifiable"
 )
 
-type CircuitId string
-
-const (
-	AtomicQueryMTPV2OnChainVotingCircuit CircuitId = "AtomicQueryMTPV2OnChainVoting"
-)
-
-type Operators int
-
-const (
-	NOOP Operators = iota
-	EQ
-	LT
-	GT
-	IN
-	NIN
-	NE
-)
-
-type QueryWithFieldName struct {
-	Query     Query
-	FieldName string
+type StateProvider interface {
+	ProveAuthV2(inputs []byte) ([]byte, error)
+	GetGISTProof(userId string) ([]byte, error)
+	ProveCredentialAtomicQueryMTPV2OnChainVoting(inputs []byte) ([]byte, error)
 }
 
-var QueryOperators = map[string]Operators{
-	"$noop": NOOP,
-	"$eq":   EQ,
-	"$lt":   LT,
-	"$gt":   GT,
-	"$in":   IN,
-	"$nin":  NIN,
-	"$ne":   NE,
+type TreeState struct {
+	State           *merkletree.Hash
+	ClaimsRoot      *merkletree.Hash
+	RevocationsRoot *merkletree.Hash
+	RootsRoot       *merkletree.Hash
+}
+
+type NodeAuxValue struct {
+	key   merkletree.Hash
+	value merkletree.Hash
+	noAux string
 }
 
 type AuthV2CircuitInputs struct {
@@ -69,19 +55,6 @@ type AuthV2CircuitInputs struct {
 	GISTMtpAuxHi *merkletree.Hash   `json:"gistMtpAuxHi"`
 	GISTMtpAuxHv *merkletree.Hash   `json:"gistMtpAuxHv"`
 	GISTMtpNoAux string             `json:"gistMtpNoAux"`
-}
-
-type NodeAuxValue struct {
-	key   merkletree.Hash
-	value merkletree.Hash
-	noAux string
-}
-
-type ChainInfo struct {
-	Identifier           int64  `json:"id"`
-	RpcUrl               string `json:"rpcUrl"`
-	StateContractAddress string `json:"stateContractAddress"`
-	RarimoNetworkType    string `json:"rarimoNetworkType"`
 }
 
 type GISTProofInfo struct {
@@ -128,11 +101,19 @@ type GISTProof struct {
 	Proof *merkletree.Proof `json:"proof"`
 }
 
-type StateProvider interface {
-	GetGISTProof(userId string) ([]byte, error)
-	ProveAuthV2(inputs []byte) ([]byte, error)
-	Fetch(url string, method string, body []byte, headerKey string, headerValue string) ([]byte, error)
-	LocalPrinter(msg string)
+type ClaimOfferResponse struct {
+	Identifier string                 `json:"id"`
+	Typ        string                 `json:"typ"`
+	ClaimType  string                 `json:"type"`
+	ThreadID   string                 `json:"threadID"`
+	Body       CredentialsRequestBody `json:"body"`
+	From       string                 `json:"from"`
+	To         string                 `json:"to"`
+}
+
+type CredentialsRequestBody struct {
+	Credentials []CredentialRequest `json:"Credentials"`
+	Url         string              `json:"url"`
 }
 
 type CredentialStatus struct {
@@ -160,6 +141,60 @@ type CredentialRequest struct {
 	Identifier  string `json:"id"`
 }
 
+type ClaimDetailsBody struct {
+	Id string `json:"id"`
+}
+
+type ClaimDetails struct {
+	Id        string           `json:"id"`
+	Typ       string           `json:"typ"`
+	ClaimType string           `json:"type"`
+	ThreadID  string           `json:"threadID"`
+	Body      ClaimDetailsBody `json:"body"`
+	From      string           `json:"from"`
+	To        string           `json:"to"`
+}
+
+type CircuitId string
+
+const (
+	AtomicQueryMTPV2OnChainVotingCircuit CircuitId = "AtomicQueryMTPV2OnChainVoting"
+)
+
+type Operators int
+
+const (
+	NOOP Operators = iota
+	EQ
+	LT
+	GT
+	IN
+	NIN
+	NE
+)
+
+type QueryWithFieldName struct {
+	Query     Query
+	FieldName string
+}
+
+var QueryOperators = map[string]Operators{
+	"$noop": NOOP,
+	"$eq":   EQ,
+	"$lt":   LT,
+	"$gt":   GT,
+	"$in":   IN,
+	"$nin":  NIN,
+	"$ne":   NE,
+}
+
+type ChainInfo struct {
+	Identifier           int64  `json:"id"`
+	RpcUrl               string `json:"rpcUrl"`
+	StateContractAddress string `json:"stateContractAddress"`
+	RarimoNetworkType    string `json:"rarimoNetworkType"`
+}
+
 func NewCredentialRequest(description string, id string) *CredentialRequest {
 	return &CredentialRequest{
 		Description: description,
@@ -167,26 +202,11 @@ func NewCredentialRequest(description string, id string) *CredentialRequest {
 	}
 }
 
-type CredentialsRequestBody struct {
-	Credentials []CredentialRequest `json:"Credentials"`
-	Url         string              `json:"url"`
-}
-
 func NewCredentialsRequestBody(credentials []CredentialRequest, url string) *CredentialsRequestBody {
 	return &CredentialsRequestBody{
 		Credentials: credentials,
 		Url:         url,
 	}
-}
-
-type ClaimOfferResponse struct {
-	Identifier string                 `json:"id"`
-	Typ        string                 `json:"typ"`
-	ClaimType  string                 `json:"type"`
-	ThreadID   string                 `json:"threadID"`
-	Body       CredentialsRequestBody `json:"body"`
-	From       string                 `json:"from"`
-	To         string                 `json:"to"`
 }
 
 func NewClaimOfferResponse(
@@ -206,46 +226,6 @@ func NewClaimOfferResponse(
 		Body:       body,
 		From:       from,
 		To:         to,
-	}
-}
-
-type claimDetailsBody struct {
-	Id string `json:"id"`
-}
-
-func NewClaimDefailsBody(id string) *claimDetailsBody {
-	return &claimDetailsBody{
-		Id: id,
-	}
-}
-
-type ClaimDetails struct {
-	Id        string           `json:"id"`
-	Typ       string           `json:"typ"`
-	ClaimType string           `json:"type"`
-	ThreadID  string           `json:"threadID"`
-	Body      claimDetailsBody `json:"body"`
-	From      string           `json:"from"`
-	To        string           `json:"to"`
-}
-
-func NewClaimDetails(
-	id string,
-	typ string,
-	claimType string,
-	threadID string,
-	body claimDetailsBody,
-	from string,
-	to string,
-) *ClaimDetails {
-	return &ClaimDetails{
-		Id:        id,
-		Typ:       typ,
-		ClaimType: claimType,
-		ThreadID:  threadID,
-		Body:      body,
-		From:      from,
-		To:        to,
 	}
 }
 
@@ -548,4 +528,10 @@ type OperationDetails struct {
 	GISTHash      string `json:"GISTHash"`
 	StateRootHash string `json:"stateRootHash"`
 	Timestamp     string `json:"timestamp"`
+}
+
+type RegistrationData struct {
+	Secret    string
+	Nullifier string
+	JWZ       string
 }
