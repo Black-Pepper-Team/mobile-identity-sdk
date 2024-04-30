@@ -225,7 +225,7 @@ func (i *Identity) PrepareAuth2Inputs(hash []byte, circuitID circuits.CircuitID)
 
 	gistProofInfoRaw, err := i.stateProvider.GetGISTProof(i.DID())
 	if err != nil {
-		return nil, fmt.Errorf("error getting gist proof: %v", err)
+		return nil, fmt.Errorf("error getting gist proof from state: %v", err)
 	}
 
 	gistProofInfo := new(GISTProofInfo)
@@ -305,7 +305,7 @@ func (i *Identity) Register(
 	schemaJsonLd []byte,
 	issuingAuthorityCode string,
 ) (*RegistrationData, error) {
-	credentials, err := i.initVerifiableCredentials(schemaJsonLd)
+	credentials, err := i.initVerifiableCredentials(offerData)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing verifiable credentials: %v", err)
 	}
@@ -417,15 +417,11 @@ func (i *Identity) Register(
 		return nil, fmt.Errorf("error packing calldata: %v", err)
 	}
 
-	jwz, err := i.GenerateJWZ(calldata)
-	if err != nil {
-		return nil, fmt.Errorf("error generating jwz: %v", err)
-	}
-
 	return &RegistrationData{
-		JWZ:       jwz,
-		Secret:    secret.String(),
-		Nullifier: nullifier.String(),
+		Calldata:          hex.EncodeToString(calldata),
+		Secret:            secret.String(),
+		Nullifier:         nullifier.String(),
+		DocumentNullifier: documentNullifier.String(),
 	}, nil
 }
 
@@ -884,7 +880,7 @@ func (i *Identity) prepareQueryInputs(
 
 	gistProofInfoRaw, err := i.stateProvider.GetGISTProof(i.DID())
 	if err != nil {
-		return nil, nil, fmt.Errorf("error getting gist proof: %v", err)
+		return nil, nil, fmt.Errorf("error getting gist proof from state: %v", err)
 	}
 
 	gistProofInfo := new(GISTProofInfo)
@@ -894,7 +890,7 @@ func (i *Identity) prepareQueryInputs(
 
 	gistProof, err := gistProofInfo.GetProof()
 	if err != nil {
-		return nil, nil, fmt.Errorf("error getting gist proof: %v", err)
+		return nil, nil, fmt.Errorf("error getting gist proof for: %v", err)
 	}
 
 	globalNodeAux := i.getNodeAuxValue(gistProof.Proof)

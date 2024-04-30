@@ -531,7 +531,8 @@ type OperationDetails struct {
 }
 
 type RegistrationData struct {
-	Secret    string
-	Nullifier string
-	JWZ       string
+	Secret            string
+	Nullifier         string
+	Calldata          string
+	DocumentNullifier string
 }

@@ -75,9 +75,9 @@ type SparseMerkleTreeProof struct {
 }
 
 type VerifierHelperProofPoints struct {
-	A [2]*big.Int
-	B [2][2]*big.Int
-	C [2]*big.Int
+	A [2]*big.Int    `json:"a"`
+	B [2][2]*big.Int `json:"b"`
+	C [2]*big.Int    `json:"c"`
 }
 
 // RegistrationMetaData contains all meta data concerning the Registration contract.
