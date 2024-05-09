@@ -304,6 +304,7 @@ func (i *Identity) Register(
 	votingAddress string,
 	schemaJsonLd []byte,
 	issuingAuthorityCode string,
+	stateInfoJSON []byte,
 ) (*RegistrationData, error) {
 	credentials, err := i.initVerifiableCredentials(offerData)
 	if err != nil {
@@ -334,9 +335,9 @@ func (i *Identity) Register(
 		return nil, fmt.Errorf("error hashing secret and nullifier: %v", err)
 	}
 
-	coreStateInfo, err := i.getStateInfo(rarimoCoreURL, issuerDid)
-	if err != nil {
-		return nil, fmt.Errorf("error getting state info: %v", err)
+	coreStateInfo := new(StateInfo)
+	if err := json.Unmarshal(stateInfoJSON, coreStateInfo); err != nil {
+		return nil, fmt.Errorf("error unmarshaling state info: %v", err)
 	}
 
 	issuerState, err := i.GetIssuerState(credential)
@@ -1326,31 +1327,57 @@ func (i *Identity) IsFinalized(
 	rarimoCoreURL string,
 	issuerDid string,
 	creationTimestamp int64,
-) (bool, error) {
-	coreStateInfo, err := i.getStateInfo(rarimoCoreURL, issuerDid)
-	if err != nil {
-		return false, fmt.Errorf("error getting state info: %v", err)
+	stateInfoJSON []byte,
+) ([]byte, error) {
+	var stateInfo *StateInfo
+	if len(stateInfoJSON) != 0 {
+		stateInfo = new(StateInfo)
+		if err := json.Unmarshal(stateInfoJSON, stateInfo); err != nil {
+			return nil, fmt.Errorf("error unmarshaling state info: %v", err)
+		}
+	} else {
+		coreStateInfo, err := i.getStateInfo(rarimoCoreURL, issuerDid)
+		if err != nil {
+			return nil, fmt.Errorf("error getting state info: %v", err)
+		}
+
+		stateInfo = coreStateInfo
 	}
 
-	coreOperation, err := i.getCoreOperation(rarimoCoreURL, coreStateInfo.LastUpdateOperationIdx)
+	coreOperation, err := i.getCoreOperation(rarimoCoreURL, stateInfo.LastUpdateOperationIdx)
 	if err != nil {
-		return false, fmt.Errorf("error getting core operation: %v", err)
+		return nil, fmt.Errorf("error getting core operation: %v", err)
 	}
 
 	timestamp, err := strconv.ParseInt(coreOperation.Timestamp, 10, 64)
 	if err != nil {
-		return false, fmt.Errorf("timestamp is not valid integer: %v", err)
+		return nil, fmt.Errorf("timestamp is not valid integer: %v", err)
 	}
 
 	if creationTimestamp > timestamp {
-		return false, nil
+		response := &FinalizedResponse{
+			IsFinalized: false,
+			StateInfo:   &StateInfo{},
+		}
+
+		return json.Marshal(response)
 	}
 
 	if coreOperation.Status != OperationFinalizedStatus {
-		return false, nil
+		response := &FinalizedResponse{
+			IsFinalized: false,
+			StateInfo:   stateInfo,
+		}
+
+		return json.Marshal(response)
 	}
 
-	return true, nil
+	response := &FinalizedResponse{
+		IsFinalized: true,
+		StateInfo:   stateInfo,
+	}
+
+	return json.Marshal(response)
 }
 
 var OperationFinalizedStatus = "SIGNED"

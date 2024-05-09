@@ -15,6 +15,11 @@ type StateProvider interface {
 	ProveCredentialAtomicQueryMTPV2OnChainVoting(inputs []byte) ([]byte, error)
 }
 
+type FinalizedResponse struct {
+	IsFinalized bool       `json:"isFinalized"`
+	StateInfo   *StateInfo `json:"stateInfo"`
+}
+
 type TreeState struct {
 	State           *merkletree.Hash
 	ClaimsRoot      *merkletree.Hash
