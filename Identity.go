@@ -1323,23 +1323,29 @@ func (i *Identity) getEthereumAccountAddress() (string, error) {
 	return "0x" + hex.EncodeToString(address), nil
 }
 
+type IsFinalizedRequest struct {
+	RarimoCoreURL string `json:"rarimoCoreURL"`
+	IssuerDid     string `json:"issuerDid"`
+	StateInfoJSON []byte `json:"stateInfo"`
+	Timestamp     int64  `json:"timestamp"`
+}
+
 func (i *Identity) IsFinalized(
-	rarimoCoreURLBytes []byte,
-	issuerDidBytes []byte,
-	stateInfoJSON []byte,
-	creationTimestamp int64,
+	isFinalizedRequestJSON []byte,
 ) ([]byte, error) {
-	rarimoCoreURL := string(rarimoCoreURLBytes)
-	issuerDid := string(issuerDidBytes)
+	isFinalizedRequest := new(IsFinalizedRequest)
+	if err := json.Unmarshal(isFinalizedRequestJSON, isFinalizedRequest); err != nil {
+		return nil, fmt.Errorf("error unmarshaling is finalized request: %v", err)
+	}
 
 	var stateInfo *StateInfo
-	if len(stateInfoJSON) != 0 {
+	if len(isFinalizedRequest.StateInfoJSON) != 0 {
 		stateInfo = new(StateInfo)
-		if err := json.Unmarshal(stateInfoJSON, stateInfo); err != nil {
+		if err := json.Unmarshal(isFinalizedRequest.StateInfoJSON, stateInfo); err != nil {
 			return nil, fmt.Errorf("error unmarshaling state info: %v", err)
 		}
 	} else {
-		coreStateInfo, err := i.getStateInfo(rarimoCoreURL, issuerDid)
+		coreStateInfo, err := i.getStateInfo(isFinalizedRequest.RarimoCoreURL, isFinalizedRequest.IssuerDid)
 		if err != nil {
 			return nil, fmt.Errorf("error getting state info: %v", err)
 		}
@@ -1347,7 +1353,7 @@ func (i *Identity) IsFinalized(
 		stateInfo = coreStateInfo
 	}
 
-	coreOperation, err := i.getCoreOperation(rarimoCoreURL, stateInfo.LastUpdateOperationIdx)
+	coreOperation, err := i.getCoreOperation(isFinalizedRequest.RarimoCoreURL, stateInfo.LastUpdateOperationIdx)
 	if err != nil {
 		return nil, fmt.Errorf("error getting core operation: %v", err)
 	}
@@ -1357,7 +1363,7 @@ func (i *Identity) IsFinalized(
 		return nil, fmt.Errorf("timestamp is not valid integer: %v", err)
 	}
 
-	if creationTimestamp > timestamp {
+	if isFinalizedRequest.Timestamp > timestamp {
 		response := &FinalizedResponse{
 			IsFinalized: false,
 			StateInfo:   &StateInfo{},
