@@ -1324,11 +1324,14 @@ func (i *Identity) getEthereumAccountAddress() (string, error) {
 }
 
 func (i *Identity) IsFinalized(
-	rarimoCoreURL string,
-	issuerDid string,
-	creationTimestamp int64,
+	rarimoCoreURLBytes []byte,
+	issuerDidBytes []byte,
 	stateInfoJSON []byte,
+	creationTimestamp int64,
 ) ([]byte, error) {
+	rarimoCoreURL := string(rarimoCoreURLBytes)
+	issuerDid := string(issuerDidBytes)
+
 	var stateInfo *StateInfo
 	if len(stateInfoJSON) != 0 {
 		stateInfo = new(StateInfo)
