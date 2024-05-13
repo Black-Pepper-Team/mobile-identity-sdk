@@ -633,7 +633,8 @@ func (i *Identity) getCoreOperation(rarimoCoreURL string, index string) (*Operat
 }
 
 func (i *Identity) getCoreMTP(rarimoCoreURL string, issuerDid string, createdAtBlock string) (*CoreMTP, error) {
-	issuerIdHex, err := i.didToIDHex(issuerDid)
+	didHelper := &DidHelper{}
+	issuerIdHex, err := didHelper.DidToIDHex(issuerDid)
 	if err != nil {
 		return nil, fmt.Errorf("error converting issuer did to id hex: %v", err)
 	}
@@ -668,7 +669,8 @@ func (i *Identity) getCoreMTP(rarimoCoreURL string, issuerDid string, createdAtB
 }
 
 func (i *Identity) getStateInfo(rarimoCoreURL string, issuerDid string) (*StateInfo, error) {
-	issuerIdHex, err := i.didToIDHex(issuerDid)
+	didHelper := &DidHelper{}
+	issuerIdHex, err := didHelper.DidToIDHex(issuerDid)
 	if err != nil {
 		return nil, fmt.Errorf("error converting issuer did to id hex: %v", err)
 	}
@@ -1094,7 +1096,9 @@ func (i *Identity) getStateProof(operationProof OperationProof) ([]byte, error) 
 	return proof, nil
 }
 
-func (i *Identity) didToIDHex(did string) (string, error) {
+type DidHelper struct{}
+
+func (*DidHelper) DidToIDHex(did string) (string, error) {
 	didParsed, err := w3c.ParseDID(did)
 	if err != nil {
 		return "", fmt.Errorf("error parsing did: %v", err)
