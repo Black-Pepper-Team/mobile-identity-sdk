@@ -223,7 +223,7 @@ func (i *Identity) PrepareAuth2Inputs(hash []byte, circuitID circuits.CircuitID)
 		return nil, fmt.Errorf("error getting user id: %v", err)
 	}
 
-	gistProofInfoRaw, err := i.stateProvider.GetGISTProof(i.DID())
+	gistProofInfoRaw, err := i.stateProvider.GetGISTProof(i.DID(), "")
 	if err != nil {
 		return nil, fmt.Errorf("error getting gist proof from state: %v", err)
 	}
@@ -340,7 +340,9 @@ func (i *Identity) Register(
 		return nil, fmt.Errorf("error unmarshaling state info: %v", err)
 	}
 
-	issuerState, err := i.GetIssuerState(credential)
+	swappedCoreStateHash := hexEndianSwap(coreStateInfo.Hash)
+
+	issuerState, err := i.GetIssuerState(credential, &swappedCoreStateHash)
 	if err != nil {
 		return nil, fmt.Errorf("error getting issuer state: %v", err)
 	}
@@ -360,7 +362,7 @@ func (i *Identity) Register(
 		return nil, fmt.Errorf("error getting core operation proof: %v", err)
 	}
 
-	votingQueryInputs, documentNullifier, err := i.prepareQueryInputs(commitment, credential, coreStateInfo.Hash, votingAddress, schemaJsonLd)
+	votingQueryInputs, documentNullifier, err := i.prepareQueryInputs(commitment, credential, coreStateInfo.Hash, votingAddress, schemaJsonLd, coreStateInfo.CreatedAtBlock)
 	if err != nil {
 		return nil, fmt.Errorf("error preparing query inputs: %v", err)
 	}
@@ -695,8 +697,16 @@ func (i *Identity) getStateInfo(rarimoCoreURL string, issuerDid string) (*StateI
 	return &getStateInfoResponse.State, nil
 }
 
-func (i *Identity) getRevocationStatus(status *CredentialStatus) (*ProofStatus, error) {
-	response, err := http.Get(status.Identifier)
+func (i *Identity) getRevocationStatus(
+	status *CredentialStatus,
+	endianSwappedCoreStateHash *string,
+) (*ProofStatus, error) {
+	requestUrl := status.Identifier
+	if endianSwappedCoreStateHash != nil {
+		requestUrl = fmt.Sprintf("%s?state_hash=%s", requestUrl, *endianSwappedCoreStateHash)
+	}
+
+	response, err := http.Get(requestUrl)
 	if err != nil {
 		return nil, fmt.Errorf("error getting revocation status: %v", err)
 	}
@@ -730,6 +740,7 @@ func (i *Identity) DidToId(did string) (string, error) {
 
 func (i *Identity) GetIssuerState(
 	credential *verifiable.W3CCredential,
+	endianSwappedCoreStateHash *string,
 ) (string, error) {
 	credentialStatusRaw, ok := credential.CredentialStatus.(map[string]interface{})
 	if !ok {
@@ -746,7 +757,7 @@ func (i *Identity) GetIssuerState(
 		return "", fmt.Errorf("error unmarshaling credential status: %v", err)
 	}
 
-	revStatus, err := i.getRevocationStatus(credentialStatus)
+	revStatus, err := i.getRevocationStatus(credentialStatus, endianSwappedCoreStateHash)
 	if err != nil {
 		return "", fmt.Errorf("error getting revocation status: %v", err)
 	}
@@ -756,6 +767,7 @@ func (i *Identity) GetIssuerState(
 
 func (i *Identity) findNonRevokedCredential(
 	credentials []*verifiable.W3CCredential,
+	endianSwappedCoreStateHash *string,
 ) (*verifiable.W3CCredential, *ProofStatus, error) {
 	for _, credential := range credentials {
 		credentialStatusRaw, ok := credential.CredentialStatus.(map[string]interface{})
@@ -773,7 +785,7 @@ func (i *Identity) findNonRevokedCredential(
 			return nil, nil, fmt.Errorf("error unmarshaling credential status: %v", err)
 		}
 
-		status, err := i.getRevocationStatus(credentialStatus)
+		status, err := i.getRevocationStatus(credentialStatus, endianSwappedCoreStateHash)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error getting revocation status: %v", err)
 		}
@@ -790,8 +802,9 @@ func (i *Identity) findNonRevokedCredential(
 
 func (i *Identity) getPreparedCredential(
 	credential *verifiable.W3CCredential,
+	endianSwappedCoreStateHash *string,
 ) (*verifiable.W3CCredential, *ProofStatus, *core.Claim, error) {
-	credential, revStatus, err := i.findNonRevokedCredential([]*verifiable.W3CCredential{credential})
+	credential, revStatus, err := i.findNonRevokedCredential([]*verifiable.W3CCredential{credential}, endianSwappedCoreStateHash)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error finding non-revoked credential: %v", err)
 	}
@@ -865,6 +878,7 @@ func (i *Identity) prepareQueryInputs(
 	coreStateHash string,
 	votingAddress string,
 	schemaJson []byte,
+	blockNumber string,
 ) (*AtomicQueryMTPV2OnChainVotingCircuitInputs, *big.Int, error) {
 	accountAddress, err := i.getEthereumAccountAddress()
 	if err != nil {
@@ -881,7 +895,7 @@ func (i *Identity) prepareQueryInputs(
 		return nil, nil, fmt.Errorf("error getting user id: %v", err)
 	}
 
-	gistProofInfoRaw, err := i.stateProvider.GetGISTProof(i.DID())
+	gistProofInfoRaw, err := i.stateProvider.GetGISTProof(i.DID(), blockNumber)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting gist proof from state: %v", err)
 	}
@@ -899,7 +913,9 @@ func (i *Identity) prepareQueryInputs(
 	globalNodeAux := i.getNodeAuxValue(gistProof.Proof)
 	nodeAuxAuth := i.getNodeAuxValue(i.authClaimNonRevProof)
 
-	validCredential, revStatus, coreClaim, err := i.getPreparedCredential(credential)
+	swappedCoreStateHash := hexEndianSwap(coreStateHash)
+
+	validCredential, revStatus, coreClaim, err := i.getPreparedCredential(credential, &swappedCoreStateHash)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting prepared credential: %v", err)
 	}

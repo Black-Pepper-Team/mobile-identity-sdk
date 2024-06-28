@@ -11,7 +11,7 @@ import (
 
 type StateProvider interface {
 	ProveAuthV2(inputs []byte) ([]byte, error)
-	GetGISTProof(userId string) ([]byte, error)
+	GetGISTProof(userId string, blockNumber string) ([]byte, error)
 	ProveCredentialAtomicQueryMTPV2OnChainVoting(inputs []byte) ([]byte, error)
 }
 
